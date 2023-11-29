@@ -25,7 +25,11 @@ end
 
 local function restore()
   M.enable()
-  buffers = file.load_buffers()
+  local bfs = file.load_buffers()
+  if bfs == nil then
+    return
+  end
+  buffers = bfs
   os.remove('./.resurrect')
   for _, v in ipairs(buffers) do
     vim.cmd('e ' .. v)
@@ -54,6 +58,9 @@ end
 function M.setup(config)
   local cfg = config or {}
 
+  if cfg.auto_enable then
+    M.enable()
+  end
   vim.api.nvim_create_user_command('ResurrectEnable', M.enable, {})
   vim.api.nvim_create_user_command('Resurrect', restore, {})
 end
