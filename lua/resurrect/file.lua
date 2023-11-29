@@ -29,7 +29,7 @@ function M.del(path)
   local ct = file:read('a')
   file:close()
 
-  os.remove('./.resurrect')
+  os.remove('.resurrect')
 
   file = open_file('w')
   if file == nil then

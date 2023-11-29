@@ -1,6 +1,8 @@
 local M = {}
 local buffers = {}
 
+local augroup_name = 'resurrect'
+
 local file = require('resurrect.file')
 
 local function add(ev)
@@ -21,30 +23,16 @@ local function del(ev)
   end
 end
 
-local function enable()
-  local group_name = 'resurrect'
-  vim.api.nvim_create_augroup(group_name, {})
+local function create_augroup()
+  vim.api.nvim_create_augroup(augroup_name, {})
   vim.api.nvim_create_autocmd('BufAdd', {
-    group = group_name,
+    group = augroup_name,
     callback = add,
   })
   vim.api.nvim_create_autocmd('BufDelete', {
-    group = group_name,
+    group = augroup_name,
     callback = del,
   })
-end
-
-local function resurrect()
-  enable()
-  local bfs = file.load_buffers()
-  if bfs == nil then
-    return
-  end
-  buffers = bfs
-  os.remove('./.resurrect')
-  for _, v in ipairs(buffers) do
-    vim.cmd('e ' .. v)
-  end
 end
 
 local function start()
@@ -57,14 +45,36 @@ local function start()
     table.insert(buffers, path)
     file.add(path)
   end
-  enable()
+  create_augroup()
+end
+
+local function stop()
+  vim.api.nvim_del_augroup_by_name(augroup_name)
+end
+
+local function resurrect(fargs)
+  if fargs.bang then
+    stop()
+    return
+  end
+
+  create_augroup()
+  local bfs = file.load_buffers()
+  if bfs == nil then
+    return
+  end
+  buffers = bfs
+  os.remove('.resurrect')
+  for _, v in ipairs(buffers) do
+    vim.cmd('e ' .. v)
+  end
 end
 
 function M.setup()
   if vim.fn.filereadable('.resurrect') == 1 then
-    enable()
+    create_augroup()
   end
-  vim.api.nvim_create_user_command('Resurrect', resurrect, {})
+  vim.api.nvim_create_user_command('Resurrect', resurrect, { bang = true })
   vim.api.nvim_create_user_command('ResurrectStart', start, {})
 end
 
