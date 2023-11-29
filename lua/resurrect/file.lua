@@ -1,7 +1,7 @@
 local M = {}
 
 local function open_file(perm)
-  local file = io.open('./.resurrect', perm)
+  local file = io.open('.resurrect', perm)
   if file == nil then
     error('could not open resurrection file')
     return
