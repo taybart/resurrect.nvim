@@ -63,14 +63,11 @@ local function start_session()
   enable()
 end
 
-function M.setup(config)
-  local cfg = config or {}
-
-  if cfg.auto_enable then
+function M.setup()
+  if vim.fn.filereadable('.resurrect') == 1 then
     enable()
   end
   vim.api.nvim_create_user_command('Resurrect', restore, {})
-  vim.api.nvim_create_user_command('ResurrectEnable', enable, {})
   vim.api.nvim_create_user_command('ResurrectStart', start_session, {})
 end
 
