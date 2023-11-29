@@ -58,6 +58,7 @@ local function start_session()
 
   for _, v in ipairs(bufnums) do
     local path = vim.api.nvim_buf_get_name(v)
+    table.insert(buffers, path)
     file.add(path)
   end
   enable()
