@@ -108,7 +108,7 @@ local function delete_session(arg)
     if M.active_session == u.session_shortname(s.name) then
       stop()
     end
-    M.db.delete_session(s.id)
+    M.db:delete_session(s.id)
     return
   end
   M.db:get_session(function(name, s)
@@ -119,7 +119,7 @@ local function delete_session(arg)
         if M.active_session == name then
           stop()
         end
-        M.db.delete_session(s.id)
+        M.db:delete_session(s.id)
       end
     end)
   end)
