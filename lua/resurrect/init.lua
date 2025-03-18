@@ -69,7 +69,7 @@ local function resurrect(fargs)
       end
     end
 
-    if #dead_files then
+    if #dead_files > 0 then
       vim.print(dead_files)
       vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
     end
