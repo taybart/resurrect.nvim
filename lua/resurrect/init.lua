@@ -8,7 +8,7 @@ local M = {
 local buffers = {}
 
 local augroup_name = 'resurrect'
-local utils = require('taybart/utils')
+local util = require('resurrect/util')
 
 local function add(ev)
   if ev.match ~= nil then
@@ -62,7 +62,7 @@ local function resurrect(fargs)
   M.db.load_session(function(session_name, files)
     local dead_files = {}
     for _, v in ipairs(files) do
-      if utils.file_exists(v.path) then
+      if util.file_exists(v.path) then
         vim.cmd('e ' .. v.path)
       else
         table.insert(dead_files, v)
@@ -109,7 +109,7 @@ function M.setup(opts)
   end
 
   if M.config.add_commands then
-    utils.commands.user_command('Resurrect', {
+    util.user_command('Resurrect', {
       default = resurrect,
       start = { cb = start, basic = true },
       stop = stop,
