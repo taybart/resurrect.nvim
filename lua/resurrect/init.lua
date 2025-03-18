@@ -2,6 +2,7 @@ local M = {
   db = nil,
   config = {
     status_icon = '🪦',
+    add_commands = true,
   },
 }
 local buffers = {}
@@ -40,7 +41,7 @@ local function start(fargs)
   for _, v in ipairs(bufnums) do
     local path = vim.api.nvim_buf_get_name(v)
     table.insert(buffers, path)
-    M.db:add(path) -- TODO: need to create new session
+    M.db:add(path)
   end
   create_augroup()
 end
@@ -67,16 +68,18 @@ end
 function M.setup(opts)
   M.config = vim.tbl_deep_extend('force', M.config, opts)
 
-  M.db = require('resurrect/db').setup()
+  M.db = require('resurrect/db').setup(M.config)
 
   if M.db.has_sessions() then
     vim.g.has_resurrect_sessions = M.config.status_icon
     vim.notify('there are resurrect sessions available')
   end
 
-  vim.api.nvim_create_user_command('Resurrect', resurrect, { bang = true })
-  vim.api.nvim_create_user_command('ResurrectStart', start, { nargs = '*' })
-  vim.api.nvim_create_user_command('ResurrectStop', stop, {})
+  if M.config.add_commands then
+    vim.api.nvim_create_user_command('Resurrect', resurrect, { bang = true })
+    vim.api.nvim_create_user_command('ResurrectStart', start, { nargs = '*' })
+    vim.api.nvim_create_user_command('ResurrectStop', stop, {})
+  end
 end
 
 return M

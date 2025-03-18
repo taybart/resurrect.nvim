@@ -6,12 +6,14 @@ local M = {
     name = nil,
     files = {},
   },
+  config = nil,
 }
 
 local sqlite = require('sqlite')
 local u = require('resurrect/util')
 
-function M.setup()
+function M.setup(config)
+  M.config = config
   M.db = sqlite({
     uri = vim.fn.stdpath('data') .. '/resurrect.db',
     opts = {
@@ -78,7 +80,7 @@ end
 
 function M:load()
   self.session.files = self.db:select('files', { where = { session_id = self.id } })
-  if M.debug then
+  if M.config.debug then
     vim.print(self.session.files)
   end
   return self.session.files
