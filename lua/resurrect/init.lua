@@ -109,6 +109,11 @@ local function delete_session(arg)
       stop()
     end
     M.db:delete_session(s.id)
+    if M.db:has_sessions() then
+      vim.g.has_resurrect_sessions = M.config.status_icon
+    else
+      vim.g.has_resurrect_sessions = ''
+    end
     return
   end
   M.db:get_session(function(name, s)
@@ -120,6 +125,12 @@ local function delete_session(arg)
           stop()
         end
         M.db:delete_session(s.id)
+
+        if M.db:has_sessions() then
+          vim.g.has_resurrect_sessions = M.config.status_icon
+        else
+          vim.g.has_resurrect_sessions = ''
+        end
       end
     end)
   end)
