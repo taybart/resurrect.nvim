@@ -37,17 +37,10 @@ For example with `nvim-lualine/lualine.nvim`:
   {
     'nvim-lualine/lualine.nvim',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
-    config = function()
-      require('lualine').setup({
-        sections = {
-          lualine_a = {},
-          lualine_c = {
-            { 'filename', file_status = true, path = 1 },
-          },
-          lualine_x = { 'encoding', 'fileformat', 'filetype' },
-          lualine_y = { 'g:has_resurrect_sessions' },
-        },
-      })
-    end,
+    opts = {
+      sections = {
+        lualine_y = { 'g:has_resurrect_sessions' },
+      },
+    },
   },
 ```
