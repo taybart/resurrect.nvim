@@ -12,6 +12,7 @@ something like [tpope/vim-obsession](https://github.com/tpope/vim-obsession) is 
     dependencies = { 'kkharji/sqlite.lua' },
     opts = {
         status_icon = '🪦', -- for use in status line with `g:has_resurrect_sessions`
+        status_icon_active = '📓', -- for use in status line when session active with `g:has_resurrect_sessions`
         add_command = true, -- add Resurrect user command
         always_choose = true, -- show picker even if one session exists
         quiet = false, -- print message to console when sessions are found

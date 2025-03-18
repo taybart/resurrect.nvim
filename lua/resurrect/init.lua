@@ -3,6 +3,7 @@ local M = {
   active_session = nil,
   config = {
     status_icon = '🪦',
+    status_icon_active = '📓',
     add_command = true,
     always_choose = true, -- show picker even if one session exists
     quiet = false,
@@ -75,7 +76,7 @@ local function start(args)
   end
 
   create_augroup()
-  vim.g.has_resurrect_sessions = M.config.status_icon .. ' ' .. session_name
+  vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
   M.active_session = session_name
 end
 
@@ -105,7 +106,7 @@ local function resurrect(fargs)
     end
 
     create_augroup()
-    vim.g.has_resurrect_sessions = M.config.status_icon .. ' ' .. session_name
+    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
     M.active_session = session_name
   end)
 end
