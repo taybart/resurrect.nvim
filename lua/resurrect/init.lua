@@ -8,6 +8,7 @@ local M = {
 local buffers = {}
 
 local augroup_name = 'resurrect'
+local utils = require('taybart/utils')
 
 local function add(ev)
   if ev.match ~= nil then
@@ -32,17 +33,20 @@ local function create_augroup()
   })
 end
 
-local function start(fargs)
+local function start(args)
   local bufnums = vim.tbl_filter(function(buf)
     return vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_get_option(buf, 'buflisted')
   end, vim.api.nvim_list_bufs())
-  M.db.new_session(fargs.fargs[1])
+  local session_name = args[1] or 'default'
+  M.db.new_session(session_name)
 
   for _, v in ipairs(bufnums) do
     local path = vim.api.nvim_buf_get_name(v)
     table.insert(buffers, path)
     M.db:add(path)
   end
+
+  vim.g.has_resurrect_sessions = M.config.status_icon .. ' ' .. session_name
   create_augroup()
 end
 
@@ -56,12 +60,41 @@ local function resurrect(fargs)
     return
   end
   M.db.load_session(function(session_name, files)
+    local dead_files = {}
     for _, v in ipairs(files) do
-      vim.cmd('e ' .. v.path)
+      if utils.file_exists(v.path) then
+        vim.cmd('e ' .. v.path)
+      else
+        table.insert(dead_files, v)
+      end
+    end
+
+    if #dead_files then
+      vim.print(dead_files)
+      vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
     end
 
     vim.g.has_resurrect_sessions = M.config.status_icon .. ' ' .. session_name
     create_augroup()
+  end)
+end
+
+local function delete_session(arg)
+  if #arg > 0 then
+    local session = M.db.get_session(arg[1])
+    vim.print(session)
+    return
+  end
+  M.db.get_session(function(name, s)
+    vim.ui.select({ 'no', 'yes' }, {
+      prompt = "You want to delete session '" .. name .. "'?",
+      default = 'n',
+    }, function(input)
+      if input == 'yes' then
+        print(input)
+        M.db.delete_session(s.id)
+      end
+    end)
   end)
 end
 
@@ -76,9 +109,12 @@ function M.setup(opts)
   end
 
   if M.config.add_commands then
-    vim.api.nvim_create_user_command('Resurrect', resurrect, { bang = true })
-    vim.api.nvim_create_user_command('ResurrectStart', start, { nargs = '*' })
-    vim.api.nvim_create_user_command('ResurrectStop', stop, {})
+    utils.commands.user_command('Resurrect', {
+      default = resurrect,
+      start = { cb = start, basic = true },
+      stop = stop,
+      delete = { cb = delete_session, basic = true },
+    })
   end
 end
 

@@ -61,6 +61,22 @@ function M.has_sessions()
   return count > 0
 end
 
+function M.get_session(arg)
+  if type(arg) == 'function' then
+    local session_name = '%:' .. vim.fn.getcwd()
+    local sessions = M.db:eval('select * from sessions where name like ?', session_name)
+    if #sessions > 0 then
+      u.choose_session({ title = 'Found sessions' }, sessions, function(s)
+        arg(s.name:match('^([^:]*)'), s)
+      end)
+    end
+  end
+  if type(arg) == 'string' then
+    local session = M.db:select('sessions', { where = { name = arg .. ':' .. vim.fn.getcwd() } })
+    return session
+  end
+end
+
 function M.load_session(cb)
   local session_name = '%:' .. vim.fn.getcwd()
   local sessions = M.db:eval('select * from sessions where name like ?', session_name)
@@ -75,6 +91,12 @@ function M.load_session(cb)
       M.id = s.id
       cb(s.name:match('^([^:]*)'), M:load())
     end)
+  end
+end
+
+function M.delete_session(id)
+  if not M.db:delete('sessions', { where = { id = id } }) then
+    error('could not delete resurrect session')
   end
 end
 
