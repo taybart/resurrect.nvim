@@ -9,6 +9,7 @@ something like [tpope/vim-obsession](https://github.com/tpope/vim-obsession) is 
 ```lua
 {
     'taybart/resurrect.nvim',
+    dependencies = { 'kkharji/sqlite.lua' },
     opts = {
         status_icon = '🪦', -- for use in status line with `g:has_resurrect_sessions`
         add_command = true, -- add Resurrect user command
