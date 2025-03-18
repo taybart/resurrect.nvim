@@ -15,7 +15,7 @@ local u = require('resurrect/util')
 function M.setup(config)
   M.config = config
   M.db = sqlite({
-    uri = vim.fn.stdpath('data') .. '/resurrect.db',
+    uri = M.config.db_path,
     opts = {
       foreign_keys = true,
     },
@@ -39,10 +39,11 @@ function M:new_session(in_name)
   local session_name = name .. ':' .. vim.fn.getcwd()
   local sessions = self.db:select('sessions', { where = { name = session_name } })
   if #sessions > 0 then
-    vim.print('found existing', sessions[1].name)
+    vim.print('found existing session')
     M.session.id = sessions[1].id
     M.session.name = sessions[1].name
-    return
+    M.session.files = M:get_files(M.session)
+    return false
   end
   local success, id = self.db:insert('sessions', { name = session_name })
   if not success then
@@ -50,7 +51,7 @@ function M:new_session(in_name)
   end
   M.session.id = id
   M.session.name = session_name
-  return M
+  return true
 end
 
 function M:has_sessions()

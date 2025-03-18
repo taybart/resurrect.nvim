@@ -40,7 +40,7 @@ function M.choose_session(opts, choices, cb)
       end
       -- Add each file in the list to the preview buffer
       local line_count = 2
-      for i, f in ipairs(entry.files) do
+      for _, f in ipairs(entry.files) do
         vim.api.nvim_buf_set_lines(
           self.state.bufnr,
           line_count,
@@ -144,6 +144,18 @@ function M.file_exists(name)
   else
     return false
   end
+end
+
+function M.open_files(files)
+  local dead_files = {}
+  for _, v in ipairs(files) do
+    if M.file_exists(v.path) then
+      vim.cmd('e ' .. v.path)
+    else
+      table.insert(dead_files, v)
+    end
+  end
+  return dead_files
 end
 
 function M.extract_path_end(path, depth)

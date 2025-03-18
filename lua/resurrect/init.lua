@@ -1,16 +1,17 @@
 local M = {
   db = nil,
+  active_session = nil,
   config = {
     status_icon = '🪦',
     add_command = true,
     always_choose = true, -- show picker even if one session exists
     quiet = false,
     preview_depth = 4,
+    db_path = vim.fn.stdpath('data') .. '/resurrect.db',
+    -- hidden
     debug = false,
   },
-  active_session = nil,
 }
-local buffers = {}
 
 local augroup_name = 'resurrect'
 local u = require('resurrect/util')
@@ -47,12 +48,30 @@ local function start(args)
     return vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_get_option(buf, 'buflisted')
   end, vim.api.nvim_list_bufs())
   local session_name = args[1] or 'default'
-  M.db:new_session(session_name)
+  if not M.db:new_session(session_name) then
+    local dead_files = u.open_files(M.db.session.files)
+    if #dead_files > 0 then
+      vim.print(dead_files)
+      vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
+    end
+  end
 
   for _, v in ipairs(bufnums) do
     local path = vim.api.nvim_buf_get_name(v)
-    table.insert(buffers, path)
-    M.db:add_file(path)
+    if path ~= '' then
+      local should_add = true
+      for _, f in ipairs(M.db.session.files) do
+        if f.path == path then
+          should_add = false
+        end
+      end
+      if should_add then
+        if M.config.debug then
+          print('adding new file ' .. path .. ' to session')
+        end
+        M.db:add_file(path)
+      end
+    end
   end
 
   create_augroup()
@@ -79,15 +98,7 @@ local function resurrect(fargs)
     return
   end
   M.db:load_session(function(session_name, files)
-    local dead_files = {}
-    for _, v in ipairs(files) do
-      if u.file_exists(v.path) then
-        vim.cmd('e ' .. v.path)
-      else
-        table.insert(dead_files, v)
-      end
-    end
-
+    local dead_files = u.open_files(files)
     if #dead_files > 0 then
       vim.print(dead_files)
       vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
