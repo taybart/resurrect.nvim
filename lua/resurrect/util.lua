@@ -1,7 +1,6 @@
 local M = {}
 
 function M.choose_session(opts, choices, cb)
-  -- vim.print(opts.title, type(choices))
   if not package.loaded['telescope'] then
     vim.ui.select(choices, {
       prompt = 'Sessions',
@@ -17,6 +16,7 @@ function M.choose_session(opts, choices, cb)
   local finders = require('telescope.finders')
   local pickers = require('telescope.pickers')
   local action_state = require('telescope.actions.state')
+  local previewers = require('telescope.previewers')
 
   local choose = function(buf)
     actions.close(buf)
@@ -26,17 +26,51 @@ function M.choose_session(opts, choices, cb)
       cb(result)
     end)
   end
+  local file_list_previewer = previewers.new_buffer_previewer({
+    title = 'Session Files',
+    define_preview = function(self, entry, status)
+      -- Clear the buffer
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, {})
+
+      -- Add a title
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, { entry.display .. ':', '' })
+
+      if #entry.files == 0 then
+        return
+      end
+      -- Add each file in the list to the preview buffer
+      local line_count = 2
+      for i, f in ipairs(entry.files) do
+        vim.api.nvim_buf_set_lines(
+          self.state.bufnr,
+          line_count,
+          line_count,
+          false,
+          { '- ' .. M.extract_path_end(f.path, 4) }
+        )
+        line_count = line_count + 1
+      end
+    end,
+  })
 
   pickers
-    .new({}, {
+    .new({
+      layout_config = {
+        width = 0.8,
+        preview_width = 0.75,
+        preview_cutoff = 1,
+      },
+    }, {
       prompt_title = opts.title,
       finder = finders.new_table({
         results = assert(choices or 'No table provided'),
         entry_maker = function(entry)
           return {
             value = entry,
+            -- display = entry.name:match('^([^:]*)') .. ' → [' .. files_str .. ']',
             display = entry.name:match('^([^:]*)'),
             ordinal = entry.name,
+            files = entry.files,
           }
         end,
       }),
@@ -49,6 +83,7 @@ function M.choose_session(opts, choices, cb)
         end)
         return true
       end,
+      previewer = file_list_previewer,
     })
     :find()
 
@@ -109,6 +144,20 @@ function M.file_exists(name)
   else
     return false
   end
+end
+
+function M.extract_path_end(path, depth)
+  local components = {}
+  for part in path:gmatch('[^/]+') do
+    table.insert(components, part)
+  end
+
+  local result = {}
+  for i = math.max(1, #components - depth + 1), #components do
+    table.insert(result, components[i])
+  end
+
+  return table.concat(result, '/')
 end
 
 return M
