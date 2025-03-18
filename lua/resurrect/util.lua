@@ -46,7 +46,7 @@ function M.choose_session(opts, choices, cb)
           line_count,
           line_count,
           false,
-          { '- ' .. M.extract_path_end(f.path, 4) }
+          { '- ' .. M.extract_path_end(f.path, opts.preview_depth or 4) }
         )
         line_count = line_count + 1
       end
@@ -158,6 +158,10 @@ function M.extract_path_end(path, depth)
   end
 
   return table.concat(result, '/')
+end
+
+function M.session_shortname(name)
+  return name:match('^([^:]*)')
 end
 
 return M

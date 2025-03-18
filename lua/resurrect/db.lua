@@ -69,9 +69,13 @@ function M:get_session(arg)
       for _, s in ipairs(sessions) do
         s.files = M:get_files(s)
       end
-      u.choose_session({ title = 'Found sessions' }, sessions, function(s)
-        arg(s.name:match('^([^:]*)'), s)
-      end)
+      u.choose_session(
+        { title = 'Found sessions', preview_depth = M.config.preview_depth },
+        sessions,
+        function(s)
+          arg(u.session_shortname(s.name), s)
+        end
+      )
     end
   end
   if type(arg) == 'string' then
@@ -83,19 +87,23 @@ end
 function M:load_session(cb)
   local session_name = '%:' .. vim.fn.getcwd()
   local sessions = self.db:eval('select * from sessions where name like ?', session_name)
-  if #sessions == 1 then
+  if #sessions == 1 and not M.config.always_choose then
     M.id = sessions[1].id
-    cb(sessions[1].name:match('^([^:]*)'), M:load())
+    cb(u.session_shortname(sessions[1].name), M:load())
     return
   end
   if #sessions > 0 then
     for _, s in ipairs(sessions) do
       s.files = M:get_files(s)
     end
-    u.choose_session({ title = 'Found sessions' }, sessions, function(s)
-      M.id = s.id
-      cb(s.name:match('^([^:]*)'), M:load())
-    end)
+    u.choose_session(
+      { title = 'Found sessions', preview_depth = M.config.preview_depth },
+      sessions,
+      function(s)
+        M.id = s.id
+        cb(u.session_shortname(s.name), M:load())
+      end
+    )
   end
 end
 
