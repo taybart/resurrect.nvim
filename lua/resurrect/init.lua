@@ -43,7 +43,7 @@ end
 
 local function set_status()
   if M.active_session then
-    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
+    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. M.active_session
   elseif M.db:has_sessions() then
     vim.g.has_resurrect_sessions = M.config.status_icon
   else
