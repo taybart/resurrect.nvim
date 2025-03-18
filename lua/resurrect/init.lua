@@ -16,6 +16,7 @@ local M = {
 
 local augroup_name = 'resurrect'
 local u = require('resurrect/util')
+local git = require('resurrect/git')
 
 local function add(ev)
   if ev.match ~= nil then
@@ -38,6 +39,16 @@ local function create_augroup()
     group = id,
     callback = del,
   })
+end
+
+local function set_status()
+  if M.active_session then
+    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
+  elseif M.db:has_sessions() then
+    vim.g.has_resurrect_sessions = M.config.status_icon
+  else
+    vim.g.has_resurrect_sessions = ''
+  end
 end
 
 local function start(args)
@@ -75,9 +86,26 @@ local function start(args)
     end
   end
 
-  create_augroup()
-  vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
   M.active_session = session_name
+  create_augroup()
+  set_status()
+end
+
+local function start_git(args)
+  if M.active_session then
+    vim.print('current session (' .. M.active_session .. ') still active')
+    return
+  end
+
+  -- TODO: add watcher
+  local session_name = git.current_branch()
+  if args[1] then
+    session_name = session_name .. '@' .. args[1]
+  end
+
+  print(session_name)
+  -- git.watch_branch() -- TODO: is a timer the best way to do this?
+  start({ session_name })
 end
 
 local function stop()
@@ -106,8 +134,8 @@ local function resurrect(fargs)
     end
 
     create_augroup()
-    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
     M.active_session = session_name
+    set_status()
   end)
 end
 
@@ -121,11 +149,7 @@ local function delete_session(arg)
       stop()
     end
     M.db:delete_session(s.id)
-    if M.db:has_sessions() then
-      vim.g.has_resurrect_sessions = M.config.status_icon
-    else
-      vim.g.has_resurrect_sessions = ''
-    end
+    set_status()
     return
   end
   M.db:get_session(function(name, s)
@@ -137,12 +161,7 @@ local function delete_session(arg)
           stop()
         end
         M.db:delete_session(s.id)
-
-        if M.db:has_sessions() then
-          vim.g.has_resurrect_sessions = M.config.status_icon
-        else
-          vim.g.has_resurrect_sessions = ''
-        end
+        set_status()
       end
     end)
   end)
@@ -164,6 +183,7 @@ function M.setup(opts)
     u.user_command('Resurrect', {
       default = resurrect,
       start = { cb = start, basic = true },
+      git = { cb = start_git, basic = true },
       stop = stop,
       list = list,
       delete = { cb = delete_session, basic = true },

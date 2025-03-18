@@ -88,6 +88,10 @@ end
 function M:load_session(cb)
   local session_name = '%:' .. vim.fn.getcwd()
   local sessions = self.db:eval('select * from sessions where name like ?', session_name)
+  if type(sessions) == 'boolean' then
+    print('no sessions')
+    return
+  end
   if #sessions == 1 and not self.config.always_choose then
     self.session.id = sessions[1].id
     cb(u.session_shortname(sessions[1].name), M:load())
@@ -129,7 +133,6 @@ function M:get_files(session)
 end
 
 function M:add_file(filepath) -- TODO add cursor position
-  vim.print('session', self.session)
   self.db:insert('files', { path = filepath, session_id = self.session.id })
 end
 
