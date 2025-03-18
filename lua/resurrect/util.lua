@@ -1,95 +1,5 @@
 local M = {}
 
-function M.choose_session(opts, choices, cb)
-  if not package.loaded['telescope'] then
-    vim.ui.select(choices, {
-      prompt = 'Sessions',
-      format_item = function(s)
-        return s.name
-      end,
-    }, function(choice)
-      cb(choice)
-    end)
-  end
-  -- telescope
-  local actions = require('telescope.actions')
-  local finders = require('telescope.finders')
-  local pickers = require('telescope.pickers')
-  local action_state = require('telescope.actions.state')
-  local previewers = require('telescope.previewers')
-
-  local choose = function(buf)
-    actions.close(buf)
-    local result = action_state.get_selected_entry().value
-    vim.print(action_state.get_selected_entry())
-    vim.schedule(function()
-      cb(result)
-    end)
-  end
-  local file_list_previewer = previewers.new_buffer_previewer({
-    title = 'Session Files',
-    define_preview = function(self, entry, status)
-      -- Clear the buffer
-      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, {})
-
-      -- Add a title
-      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, { entry.display .. ':', '' })
-
-      if #entry.files == 0 then
-        return
-      end
-      -- Add each file in the list to the preview buffer
-      local line_count = 2
-      for _, f in ipairs(entry.files) do
-        vim.api.nvim_buf_set_lines(
-          self.state.bufnr,
-          line_count,
-          line_count,
-          false,
-          { '- ' .. M.extract_path_end(f.path, opts.preview_depth or 4) }
-        )
-        line_count = line_count + 1
-      end
-    end,
-  })
-
-  pickers
-    .new({
-      layout_config = {
-        width = 0.8,
-        preview_width = 0.75,
-        preview_cutoff = 1,
-      },
-    }, {
-      prompt_title = opts.title,
-      finder = finders.new_table({
-        results = assert(choices or 'No table provided'),
-        entry_maker = function(entry)
-          return {
-            value = entry,
-            -- display = entry.name:match('^([^:]*)') .. ' → [' .. files_str .. ']',
-            display = entry.name:match('^([^:]*)'),
-            ordinal = entry.name,
-            files = entry.files,
-          }
-        end,
-      }),
-      attach_mappings = function(buf, map)
-        map('i', '<CR>', function()
-          choose(buf)
-        end)
-        map('n', '<CR>', function()
-          choose(buf)
-        end)
-        return true
-      end,
-      previewer = file_list_previewer,
-    })
-    :find()
-
-  -- end telescope
-end
-
 function M.user_command(command_name, cmds)
   local function complete(arg_lead)
     local commands = {}
@@ -156,6 +66,10 @@ function M.open_files(files)
     end
   end
   return dead_files
+end
+
+function M.close_files()
+  vim.cmd('bufdo! bd!')
 end
 
 function M.extract_path_end(path, depth)

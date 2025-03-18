@@ -1,6 +1,7 @@
 local M = {
   db = nil,
   active_session = nil,
+  augroup_name = 'resurrect',
   config = {
     status_icon = '🪦',
     status_icon_active = '📓',
@@ -14,9 +15,9 @@ local M = {
   },
 }
 
-local augroup_name = 'resurrect'
-local u = require('resurrect/util')
 local git = require('resurrect/git')
+local u = require('resurrect/util')
+local ui = require('resurrect/ui')
 
 local function add(ev)
   if ev.match ~= nil then
@@ -30,7 +31,7 @@ local function del(ev)
 end
 
 local function create_augroup()
-  local id = vim.api.nvim_create_augroup(augroup_name, {})
+  local id = vim.api.nvim_create_augroup(M.augroup_name, {})
   vim.api.nvim_create_autocmd('BufAdd', {
     group = id,
     callback = add,
@@ -49,6 +50,11 @@ local function set_status()
   else
     vim.g.has_resurrect_sessions = ''
   end
+end
+
+local function stop()
+  M.active_session = nil
+  vim.api.nvim_del_augroup_by_name(M.augroup_name)
 end
 
 local function start(args)
@@ -103,14 +109,26 @@ local function start_git(args)
     session_name = session_name .. '@' .. args[1]
   end
 
-  print(session_name)
-  -- git.watch_branch() -- TODO: is a timer the best way to do this?
+  -- TODO: is a timer the best way to do this?
+  git.watch_branch(function(branches)
+    -- print(('Git branch changed from %s to %s'):format(branches.current, branches.new))
+    ui.confirmation({
+      prompt = ('Git branch changed %s -> %s, switch? [y/N]'):format(
+        branches.current,
+        branches.new
+      ),
+      callback = function(yes)
+        if yes then
+          if M.active_session then
+            stop()
+          end
+          u.close_files() -- FIXME: this leaves an empty buffer sometimes
+          start({ branches.new })
+        end
+      end,
+    })
+  end)
   start({ session_name })
-end
-
-local function stop()
-  M.active_session = nil
-  vim.api.nvim_del_augroup_by_name(augroup_name)
 end
 
 local function list()
@@ -153,17 +171,18 @@ local function delete_session(arg)
     return
   end
   M.db:get_session(function(name, s)
-    vim.ui.select({ 'no', 'yes' }, {
-      prompt = "You want to delete session '" .. name .. "'?",
-    }, function(input)
-      if input == 'yes' then
-        if M.active_session == name then
-          stop()
+    ui.confirmation({
+      prompt = ("You want to delete session '%s'? [y/N]"):format(name),
+      callback = function(yes)
+        if yes then
+          if M.active_session == name then
+            stop()
+          end
+          M.db:delete_session(s.id)
+          set_status()
         end
-        M.db:delete_session(s.id)
-        set_status()
-      end
-    end)
+      end,
+    })
   end)
 end
 

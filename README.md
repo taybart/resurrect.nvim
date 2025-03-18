@@ -2,7 +2,7 @@
 
 very simple buffer tracker.
 
-something like [tpope/vim-obsession](https://github.com/tpope/vim-obsession) is probably better for a "real" session management
+something like [tpope/vim-obsession](https://github.com/tpope/vim-obsession) or [olimorris/persisted.nvim](https://github.com/olimorris/persisted.nvim) is probably better for a session management using vim's built in `:mksession`
 
 ## Config
 

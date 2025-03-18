@@ -11,6 +11,7 @@ local M = {
 
 local sqlite = require('sqlite')
 local u = require('resurrect/util')
+local ui = require('resurrect/ui')
 
 function M.setup(config)
   M.config = config
@@ -70,7 +71,7 @@ function M:get_session(arg)
       for _, s in ipairs(sessions) do
         s.files = M:get_files(s)
       end
-      u.choose_session(
+      ui.choose_session(
         { title = 'Found sessions', preview_depth = self.config.preview_depth },
         sessions,
         function(s)
@@ -101,7 +102,7 @@ function M:load_session(cb)
     for _, s in ipairs(sessions) do
       s.files = M:get_files(s)
     end
-    u.choose_session(
+    ui.choose_session(
       { title = 'Found sessions', preview_depth = self.config.preview_depth },
       sessions,
       function(s)
