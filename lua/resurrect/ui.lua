@@ -67,7 +67,6 @@ function M.choose_session(opts, choices, cb)
         entry_maker = function(entry)
           return {
             value = entry,
-            -- display = entry.name:match('^([^:]*)') .. ' → [' .. files_str .. ']',
             display = entry.name:match('^([^:]*)'),
             ordinal = entry.name,
             files = entry.files,

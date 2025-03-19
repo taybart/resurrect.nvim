@@ -103,7 +103,6 @@ local function start_git(args)
     return
   end
 
-  -- TODO: add watcher
   local session_name = git.current_branch()
   if args[1] then
     session_name = session_name .. '@' .. args[1]
@@ -111,7 +110,6 @@ local function start_git(args)
 
   -- TODO: is a timer the best way to do this?
   git.watch_branch(function(branches)
-    -- print(('Git branch changed from %s to %s'):format(branches.current, branches.new))
     ui.confirmation({
       prompt = ('Git branch changed %s -> %s, switch? [y/N]'):format(
         branches.current,
