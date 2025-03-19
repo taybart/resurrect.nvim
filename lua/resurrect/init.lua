@@ -10,6 +10,7 @@ local M = {
     quiet = false,
     preview_depth = 4,
     db_path = vim.fn.stdpath('data') .. '/resurrect.db',
+    ignore = { '^term://', '^fugitive://' },
     -- hidden
     debug = false,
   },
@@ -20,12 +21,17 @@ local u = require('resurrect/util')
 local ui = require('resurrect/ui')
 
 local function add(ev)
-  if ev.match ~= nil then
+  if ev.match ~= nil and ev.match ~= '' then
+    for _, m in ipairs(M.config.ignore) do
+      if ev.match:match(m) ~= nil then
+        return
+      end
+    end
     M.db:add_file(ev.match)
   end
 end
 local function del(ev)
-  if ev.match ~= nil then
+  if ev.match ~= nil and ev.match ~= '' then
     M.db:del_file(ev.match)
   end
 end
@@ -43,13 +49,13 @@ local function create_augroup()
     group = id,
     callback = add,
   })
-  vim.api.nvim_create_autocmd('CursorMoved', {
-    group = id,
-    callback = update_cursor,
-  })
   vim.api.nvim_create_autocmd('BufDelete', {
     group = id,
     callback = del,
+  })
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    group = id,
+    callback = update_cursor,
   })
 end
 

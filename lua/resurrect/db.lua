@@ -131,16 +131,17 @@ end
 
 function M:get_files(session)
   local files = self.db:select('files', { where = { session_id = session.id } })
-  -- vim.print(files)
   return files
 end
 
 function M:add_file(filepath) -- TODO add cursor position
-  self.db:insert('files', { path = filepath, session_id = self.session.id })
+  if path and path ~= '' then
+    self.db:insert('files', { path = filepath, session_id = self.session.id })
+  end
 end
 
 function M:update_file(update) -- TODO add cursor position
-  if path ~= '' then
+  if path and path ~= '' then
     self.db:update('files', {
       where = { session_id = self.session.id, path = update.path },
       set = { path = update.path, row = update.row, col = update.col, session_id = self.session.id },
