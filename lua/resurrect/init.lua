@@ -1,6 +1,7 @@
 local M = {
   db = nil,
   active_session = nil,
+  augroup_name = 'resurrect',
   config = {
     status_icon = '🪦',
     status_icon_active = '📓',
@@ -14,8 +15,9 @@ local M = {
   },
 }
 
-local augroup_name = 'resurrect'
+local git = require('resurrect/git')
 local u = require('resurrect/util')
+local ui = require('resurrect/ui')
 
 local function add(ev)
   if ev.match ~= nil then
@@ -29,7 +31,7 @@ local function del(ev)
 end
 
 local function create_augroup()
-  local id = vim.api.nvim_create_augroup(augroup_name, {})
+  local id = vim.api.nvim_create_augroup(M.augroup_name, {})
   vim.api.nvim_create_autocmd('BufAdd', {
     group = id,
     callback = add,
@@ -38,6 +40,21 @@ local function create_augroup()
     group = id,
     callback = del,
   })
+end
+
+local function set_status()
+  if M.active_session then
+    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. M.active_session
+  elseif M.db:has_sessions() then
+    vim.g.has_resurrect_sessions = M.config.status_icon
+  else
+    vim.g.has_resurrect_sessions = ''
+  end
+end
+
+local function stop()
+  M.active_session = nil
+  vim.api.nvim_del_augroup_by_name(M.augroup_name)
 end
 
 local function start(args)
@@ -75,14 +92,41 @@ local function start(args)
     end
   end
 
-  create_augroup()
-  vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
   M.active_session = session_name
+  create_augroup()
+  set_status()
 end
 
-local function stop()
-  M.active_session = nil
-  vim.api.nvim_del_augroup_by_name(augroup_name)
+local function start_git(args)
+  if M.active_session then
+    vim.print('current session (' .. M.active_session .. ') still active')
+    return
+  end
+
+  local session_name = git.current_branch()
+  if args[1] then
+    session_name = session_name .. '@' .. args[1]
+  end
+
+  -- TODO: is a timer the best way to do this?
+  git.watch_branch(function(branches)
+    ui.confirmation({
+      prompt = ('Git branch changed %s -> %s, switch? [y/N]'):format(
+        branches.current,
+        branches.new
+      ),
+      callback = function(yes)
+        if yes then
+          if M.active_session then
+            stop()
+          end
+          u.close_files() -- FIXME: this leaves an empty buffer sometimes
+          start({ branches.new })
+        end
+      end,
+    })
+  end)
+  start({ session_name })
 end
 
 local function list()
@@ -106,8 +150,8 @@ local function resurrect(fargs)
     end
 
     create_augroup()
-    vim.g.has_resurrect_sessions = M.config.status_icon_active .. ' ' .. session_name
     M.active_session = session_name
+    set_status()
   end)
 end
 
@@ -121,30 +165,22 @@ local function delete_session(arg)
       stop()
     end
     M.db:delete_session(s.id)
-    if M.db:has_sessions() then
-      vim.g.has_resurrect_sessions = M.config.status_icon
-    else
-      vim.g.has_resurrect_sessions = ''
-    end
+    set_status()
     return
   end
   M.db:get_session(function(name, s)
-    vim.ui.select({ 'no', 'yes' }, {
-      prompt = "You want to delete session '" .. name .. "'?",
-    }, function(input)
-      if input == 'yes' then
-        if M.active_session == name then
-          stop()
+    ui.confirmation({
+      prompt = ("You want to delete session '%s'? [y/N]"):format(name),
+      callback = function(yes)
+        if yes then
+          if M.active_session == name then
+            stop()
+          end
+          M.db:delete_session(s.id)
+          set_status()
         end
-        M.db:delete_session(s.id)
-
-        if M.db:has_sessions() then
-          vim.g.has_resurrect_sessions = M.config.status_icon
-        else
-          vim.g.has_resurrect_sessions = ''
-        end
-      end
-    end)
+      end,
+    })
   end)
 end
 
@@ -164,6 +200,7 @@ function M.setup(opts)
     u.user_command('Resurrect', {
       default = resurrect,
       start = { cb = start, basic = true },
+      git = { cb = start_git, basic = true },
       stop = stop,
       list = list,
       delete = { cb = delete_session, basic = true },
