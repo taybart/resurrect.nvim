@@ -14,10 +14,11 @@ something like [tpope/vim-obsession](https://github.com/tpope/vim-obsession) or 
         status_icon = '🪦', -- for use in status line with `g:has_resurrect_sessions`
         status_icon_active = '📓', -- for use in status line when session active with `g:has_resurrect_sessions`
         add_command = true, -- add Resurrect user command
-        always_choose = true, -- show picker even if one session exists
+        always_choose = false, -- show picker even if one session exists
         quiet = false, -- print message to console when sessions are found
         preview_depth = 4, -- how many folders will be shown in the preview
         db_path = vim.fn.stdpath('data') .. '/resurrect.db', -- where to store session data
+        ignore = { '^term://', '^fugitive://' }, -- string.match pattern to ignore in session
     },
 }
 ```
