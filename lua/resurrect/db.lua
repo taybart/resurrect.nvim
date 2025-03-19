@@ -29,6 +29,8 @@ function M.setup(config)
       id = true, -- shortcut to primary and integer
       path = 'text',
       session_id = { 'integer', reference = 'sessions.id', on_delete = 'cascade' },
+      row = 'integer',
+      col = 'integer',
     },
   })
   M.db:open()
@@ -40,7 +42,7 @@ function M:new_session(in_name)
   local session_name = name .. ':' .. vim.fn.getcwd()
   local sessions = self.db:select('sessions', { where = { name = session_name } })
   if #sessions > 0 then
-    vim.print('found existing session')
+    vim.notify('found existing session', vim.log.levels.DEBUG)
     self.session.id = sessions[1].id
     self.session.name = sessions[1].name
     self.session.files = M:get_files(self.session)
@@ -90,7 +92,7 @@ function M:load_session(cb)
   local session_name = '%:' .. vim.fn.getcwd()
   local sessions = self.db:eval('select * from sessions where name like ?', session_name)
   if type(sessions) == 'boolean' then
-    print('no sessions')
+    vim.notify('no sessions', vim.log.levels.INFO)
     return
   end
   if #sessions == 1 and not self.config.always_choose then
@@ -135,6 +137,15 @@ end
 
 function M:add_file(filepath) -- TODO add cursor position
   self.db:insert('files', { path = filepath, session_id = self.session.id })
+end
+
+function M:update_file(update) -- TODO add cursor position
+  if path ~= '' then
+    self.db:update('files', {
+      where = { session_id = self.session.id, path = update.path },
+      set = { path = update.path, row = update.row, col = update.col, session_id = self.session.id },
+    })
+  end
 end
 
 function M:del_file(filepath)
