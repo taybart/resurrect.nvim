@@ -1,5 +1,7 @@
 local M = {}
 
+local u = require('resurrect/util')
+
 function M.choose_session(opts, choices, cb)
   if not package.loaded['telescope'] then
     vim.ui.select(choices, {
@@ -46,7 +48,7 @@ function M.choose_session(opts, choices, cb)
           line_count,
           line_count,
           false,
-          { '- ' .. M.extract_path_end(f.path, opts.preview_depth or 4) }
+          { '- ' .. u.extract_path_end(f.path, opts.preview_depth or 4) }
         )
         line_count = line_count + 1
       end
