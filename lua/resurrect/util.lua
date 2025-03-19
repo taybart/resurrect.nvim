@@ -50,13 +50,11 @@ function M.user_command(command_name, cmds)
 end
 
 function M.file_exists(name)
-  local f = io.open(name, 'r')
-  if f ~= nil then
-    io.close(f)
+  local uv = vim.uv or vim.loop
+  if uv.fs_stat(name) then
     return true
-  else
-    return false
   end
+  return false
 end
 
 function M.open_files(files)
@@ -64,6 +62,9 @@ function M.open_files(files)
   for _, v in ipairs(files) do
     if M.file_exists(v.path) then
       vim.cmd('e ' .. v.path)
+      if v.row and v.col then
+        vim.api.nvim_win_set_cursor(0, { v.row, v.col })
+      end
     else
       table.insert(dead_files, v)
     end

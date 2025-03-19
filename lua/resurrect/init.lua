@@ -10,6 +10,7 @@ local M = {
     quiet = false,
     preview_depth = 4,
     db_path = vim.fn.stdpath('data') .. '/resurrect.db',
+    ignore = { '^term://', '^fugitive://' },
     -- hidden
     debug = false,
   },
@@ -20,13 +21,25 @@ local u = require('resurrect/util')
 local ui = require('resurrect/ui')
 
 local function add(ev)
-  if ev.match ~= nil then
+  if ev.match ~= nil and ev.match ~= '' then
+    for _, m in ipairs(M.config.ignore) do
+      if ev.match:match(m) ~= nil then
+        return
+      end
+    end
     M.db:add_file(ev.match)
   end
 end
 local function del(ev)
-  if ev.match ~= nil then
+  if ev.match ~= nil and ev.match ~= '' then
     M.db:del_file(ev.match)
+  end
+end
+
+local function update_cursor(ev)
+  if ev.match ~= nil then
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    M.db:update_file({ path = ev.match, row = cursor[1], col = cursor[2] })
   end
 end
 
@@ -39,6 +52,10 @@ local function create_augroup()
   vim.api.nvim_create_autocmd('BufDelete', {
     group = id,
     callback = del,
+  })
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    group = id,
+    callback = update_cursor,
   })
 end
 
@@ -59,7 +76,7 @@ end
 
 local function start(args)
   if M.active_session then
-    vim.print('current session (' .. M.active_session .. ') still active')
+    vim.notify('current session (' .. M.active_session .. ') still active', vim.log.levels.ERROR)
     return
   end
   local bufnums = vim.tbl_filter(function(buf)
@@ -70,7 +87,7 @@ local function start(args)
     local dead_files = u.open_files(M.db.session.files)
     if #dead_files > 0 then
       vim.print(dead_files)
-      vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
+      vim.notify('there are ' .. #dead_files .. ' missing files in session', vim.log.levels.WARNING)
     end
   end
 
@@ -85,7 +102,7 @@ local function start(args)
       end
       if should_add then
         if M.config.debug then
-          print('adding new file ' .. path .. ' to session')
+          vim.notify('adding new file ' .. path .. ' to session', vim.log.levels.INFO)
         end
         M.db:add_file(path)
       end
@@ -99,7 +116,7 @@ end
 
 local function start_git(args)
   if M.active_session then
-    vim.print('current session (' .. M.active_session .. ') still active')
+    vim.notify('current session (' .. M.active_session .. ') still active', vim.log.levels.ERROR)
     return
   end
 
@@ -139,14 +156,14 @@ local function resurrect(fargs)
     return
   end
   if M.active_session then
-    vim.print('current session (' .. M.active_session .. ') still active')
+    vim.notify('current session (' .. M.active_session .. ') still active', vim.log.levels.ERROR)
     return
   end
   M.db:load_session(function(session_name, files)
     local dead_files = u.open_files(files)
     if #dead_files > 0 then
       vim.print(dead_files)
-      vim.print('WARNING: there are ' .. #dead_files .. ' missing files in session')
+      vim.notify('there are ' .. #dead_files .. ' missing files in session', vim.log.levels.WARNING)
     end
 
     create_augroup()
