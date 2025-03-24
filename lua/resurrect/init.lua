@@ -79,9 +79,7 @@ local function start(args)
     vim.notify('current session (' .. M.active_session .. ') still active', vim.log.levels.ERROR)
     return
   end
-  local bufnums = vim.tbl_filter(function(buf)
-    return vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_get_option(buf, 'buflisted')
-  end, vim.api.nvim_list_bufs())
+  local bufnums = vim.tbl_filter(vim.api.nvim_buf_is_valid, vim.api.nvim_list_bufs())
   local session_name = args[1] or 'default'
   if not M.db:new_session(session_name) then
     local dead_files = u.open_files(M.db.session.files)

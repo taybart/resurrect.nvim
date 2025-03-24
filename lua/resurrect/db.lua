@@ -135,13 +135,13 @@ function M:get_files(session)
 end
 
 function M:add_file(filepath) -- TODO add cursor position
-  if path and path ~= '' then
+  if filepath and filepath ~= '' then
     self.db:insert('files', { path = filepath, session_id = self.session.id })
   end
 end
 
 function M:update_file(update) -- TODO add cursor position
-  if path and path ~= '' then
+  if update.path and update.path ~= '' then
     self.db:update('files', {
       where = { session_id = self.session.id, path = update.path },
       set = { path = update.path, row = update.row, col = update.col, session_id = self.session.id },
