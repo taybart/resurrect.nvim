@@ -65,6 +65,7 @@ end
 local function stop()
   M.active_session = nil
   vim.api.nvim_del_augroup_by_name(M.augroup_name)
+  set_status()
 end
 
 local function start(args)

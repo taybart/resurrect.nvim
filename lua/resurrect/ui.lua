@@ -23,7 +23,6 @@ function M.choose_session(opts, choices, cb)
   local choose = function(buf)
     actions.close(buf)
     local result = action_state.get_selected_entry().value
-    vim.print(action_state.get_selected_entry())
     vim.schedule(function()
       cb(result)
     end)
