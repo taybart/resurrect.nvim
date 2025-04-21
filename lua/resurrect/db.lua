@@ -1,3 +1,5 @@
+---@class db
+---@field db sqlite_db
 local M = {
   db = nil,
   session_count = 0,

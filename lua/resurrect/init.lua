@@ -2,6 +2,7 @@ local M = {
   db = nil,
   active_session = nil,
   augroup_name = 'resurrect',
+  ---@class config
   config = {
     status_icon = '🪦',
     status_icon_active = '📓',
@@ -45,18 +46,10 @@ end
 
 local function create_augroup()
   local id = vim.api.nvim_create_augroup(M.augroup_name, {})
-  vim.api.nvim_create_autocmd('BufAdd', {
-    group = id,
-    callback = add,
-  })
-  vim.api.nvim_create_autocmd('BufDelete', {
-    group = id,
-    callback = del,
-  })
-  vim.api.nvim_create_autocmd('CursorMoved', {
-    group = id,
-    callback = update_cursor,
-  })
+  local autocmd = vim.api.nvim_create_autocmd
+  autocmd('BufAdd', { group = id, callback = add })
+  autocmd('BufDelete', { group = id, callback = del })
+  autocmd('CursorMoved', { group = id, callback = update_cursor })
 end
 
 local function set_status()
@@ -79,7 +72,7 @@ local function start(args)
     vim.notify('current session (' .. M.active_session .. ') still active', vim.log.levels.ERROR)
     return
   end
-  local bufnums = vim.tbl_filter(vim.api.nvim_buf_is_valid, vim.api.nvim_list_bufs())
+  local bufnums = vim.tbl_filter(vim.api.nvim_buf_is_loaded, vim.api.nvim_list_bufs())
   local session_name = args[1] or 'default'
   if not M.db:new_session(session_name) then
     local dead_files = u.open_files(M.db.session.files)
