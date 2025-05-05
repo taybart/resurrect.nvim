@@ -92,6 +92,11 @@ local function start(args)
           should_add = false
         end
       end
+      for _, m in ipairs(M.config.ignore) do
+        if path:match(m) ~= nil then
+          should_add = false
+        end
+      end
       if should_add then
         if M.config.debug then
           vim.notify('adding new file ' .. path .. ' to session', vim.log.levels.INFO)
