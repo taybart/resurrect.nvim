@@ -159,8 +159,12 @@ local function resurrect(fargs)
   M.db:load_session(function(session_name, files)
     local dead_files = u.open_files(files)
     if #dead_files > 0 then
-      vim.print(dead_files)
-      vim.notify('there are ' .. #dead_files .. ' missing files in session', vim.log.levels.WARNING)
+      -- vim.print(dead_files)
+      vim.notify(
+        'there are ' .. #dead_files .. ' missing files in session\n' .. vim.inspect(dead_files),
+        vim.log.levels.WARNING
+      )
+      M.db:prune_session_files(dead_files)
     end
 
     create_augroup()

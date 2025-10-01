@@ -117,6 +117,14 @@ function M:load_session(cb)
   end
 end
 
+function M:prune_session_files(dead_files)
+  -- TODO: config option to put dead files in quickfix
+  vim.notify('pruning dead files', vim.log.levels.DEBUG)
+  for _, file in ipairs(dead_files) do
+    M:del_file(file.path)
+  end
+end
+
 function M:delete_session(id)
   if not self.db:delete('sessions', { where = { id = id } }) then
     error('could not delete resurrect session')

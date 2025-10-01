@@ -50,8 +50,7 @@ function M.user_command(command_name, cmds)
 end
 
 function M.file_exists(name)
-  local uv = vim.uv or vim.loop
-  if uv.fs_stat(name) then
+  if vim.uv.fs_stat(name) then
     return true
   end
   return false
