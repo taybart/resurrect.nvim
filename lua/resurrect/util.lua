@@ -4,12 +4,12 @@ function M.user_command(command_name, cmds)
   local function complete(arg_lead)
     local commands = {}
     for name in pairs(cmds) do
-      if name ~= 'default' then
+      if name ~= "default" then
         table.insert(commands, name)
       end
     end
-    local pattern = arg_lead:gsub('(.)', function(c)
-      return string.format('%s[^%s]*', c:lower(), c:lower())
+    local pattern = arg_lead:gsub("(.)", function(c)
+      return string.format("%s[^%s]*", c:lower(), c:lower())
     end)
     -- Case-insensitive fuzzy matching
     local matches = {}
@@ -21,21 +21,21 @@ function M.user_command(command_name, cmds)
     return matches
   end
   vim.api.nvim_create_user_command(command_name, function(opts)
-    local args = vim.split(opts.args, '%s+', { trimempty = true })
+    local args = vim.split(opts.args, "%s+", { trimempty = true })
     -- Default
     if #args == 0 then
-      cmds['default'](opts)
+      cmds["default"](opts)
       return
     end
 
     local command = args[1]
     if cmds[command] == nil then
-      print('unknown command:', command)
+      print("unknown command:", command)
       return
     end
 
     table.remove(args, 1) -- Remove command
-    if type(cmds[command]) == 'function' then
+    if type(cmds[command]) == "function" then
       cmds[command](opts)
     elseif cmds[command].basic then
       cmds[command].cb(args)
@@ -43,24 +43,21 @@ function M.user_command(command_name, cmds)
       cmds[command].cb(opts)
     end
   end, {
-    nargs = '*',
+    nargs = "*",
     bang = true,
     complete = complete,
   })
 end
 
 function M.file_exists(name)
-  if vim.uv.fs_stat(name) then
-    return true
-  end
-  return false
+  return vim.uv.fs_stat(name)
 end
 
 function M.open_files(files)
   local dead_files = {}
   for _, v in ipairs(files) do
     if M.file_exists(v.path) then
-      vim.cmd('e ' .. v.path)
+      vim.cmd("e " .. v.path)
       if v.row and v.col then
         vim.api.nvim_win_set_cursor(0, { v.row, v.col })
       end
@@ -72,12 +69,12 @@ function M.open_files(files)
 end
 
 function M.close_files()
-  vim.cmd('bufdo! bd!')
+  vim.cmd("bufdo! bd!")
 end
 
 function M.extract_path_end(path, depth)
   local components = {}
-  for part in path:gmatch('[^/]+') do
+  for part in path:gmatch("[^/]+") do
     table.insert(components, part)
   end
 
@@ -86,11 +83,11 @@ function M.extract_path_end(path, depth)
     table.insert(result, components[i])
   end
 
-  return table.concat(result, '/')
+  return table.concat(result, "/")
 end
 
 function M.session_shortname(name)
-  return name:match('^([^:]*)')
+  return name:match("^([^:]*)")
 end
 
 return M

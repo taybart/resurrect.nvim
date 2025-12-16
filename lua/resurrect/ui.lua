@@ -1,10 +1,8 @@
 local M = {}
 
-local u = require("resurrect/util")
-
-function M.choose_session(opts, choices, cb)
+function M.choose_session(choices, cb)
   vim.ui.select(choices, {
-    prompt = "Sessions",
+    prompt = "Found Sessions",
     format_item = function(s)
       return s.name
     end,
@@ -36,12 +34,12 @@ function M.confirmation(opts)
   -- Set buffer content
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
     string.rep(" ", width), -- Empty padding line
-    "  " .. prompt,       -- Prompt with padding
+    "  " .. prompt,         -- Prompt with padding
     string.rep(" ", width), -- Empty padding line
   })
   -- Set buffer options
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
-  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+  vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+  vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
 
   -- Create the floating window
   local win = vim.api.nvim_open_win(buf, true, {
@@ -57,7 +55,7 @@ function M.confirmation(opts)
   })
 
   -- Set up keymaps
-  local maps = { ["y"] = true, ["n"] = true, ["<esc>"] = false, ["<enter>"] = opts.default }
+  local maps = { ["Y"] = true, ["y"] = true, ["n"] = true, ["<esc>"] = false, ["<enter>"] = opts.default }
   for k, v in pairs(maps) do
     vim.keymap.set("n", k, function()
       vim.api.nvim_win_close(win, true)
