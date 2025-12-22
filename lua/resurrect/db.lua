@@ -79,6 +79,9 @@ function M:get_session(arg)
         s.files = M:get_files(s)
       end
       require("resurrect/ui").choose_session(sessions, function(s)
+        if not s then
+          return
+        end
         arg(require("resurrect/util").session_shortname(s.name), s)
       end)
     end
