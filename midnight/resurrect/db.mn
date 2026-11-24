@@ -1,0 +1,163 @@
+---@class resurrect.Session
+---@field id integer|nil
+---@field name string|nil - `<name>:<cwd>`
+---@field files table[] - rows of the files table
+
+---@class resurrect.DB
+---@field db sqlite_db
+---@field config table
+---@field session resurrect.Session - the active session
+---@field session_count integer
+local class DB {
+  --- opens (creating if needed) the sqlite db at config.db_path
+  new(config) {
+    local sqlite = require('sqlite')
+    self.config = config
+    -- per instance, in new(): a table as a class field would be shared by
+    -- every instance
+    self.session = { id = nil, name = nil, files = {} }
+    self.session_count = 0
+    self.db = sqlite({
+      uri = config.db_path,
+      opts = { foreign_keys = true },
+      sessions = {
+        id = true,
+        created = { 'timestamp', default = sqlite.lib.strftime('%s', 'now') },
+        name = { 'text', unique = true },
+      },
+      files = {
+        id = true,
+        path = 'text',
+        session_id = { 'integer', reference = 'sessions.id', on_delete = 'cascade' },
+        row = 'integer',
+        col = 'integer',
+      },
+    })
+    ---@diagnostic disable-next-line: missing-parameter
+    self.db:open()
+  }
+
+  --- sessions for the cwd (names end in `:<cwd>`). Filtered here rather than
+  --- w/ `name like '%:<cwd>'`, since `_` and `%` in a path are LIKE wildcards
+  ---@return table[]
+  cwd_sessions() {
+    const rows = self.db:eval('select * from sessions')
+    if type(rows) != 'table' { return {} } -- (eval returns a boolean for no rows)
+    const suffix = ":{vim.fn.getcwd()}"
+    return vim.iter(rows):filter((s) -> vim.endswith(s.name, suffix)):totable()
+  }
+
+  ---@return boolean
+  has_sessions() {
+    self.session_count = #self:cwd_sessions()
+    return self.session_count > 0
+  }
+
+  --- makes `name` (default: 'default') the active session, creating it if
+  --- it's new
+  ---@return boolean created - false if it already existed (its files are loaded)
+  new_session(name = 'default') {
+    const session_name = "{name}:{vim.fn.getcwd()}"
+    ---@diagnostic disable-next-line: missing-fields
+    const existing = self.db:select('sessions', { where = { name = session_name } })[1]
+    if existing {
+      vim.notify('found existing session', vim.log.levels.DEBUG)
+      self:activate(existing)
+      return false
+    }
+    const success, id = self.db:insert('sessions', { name = session_name })
+    if !success {
+      error('could not add new session')
+    }
+    self.session = { id = id, name = session_name, files = {} }
+    return true
+  }
+
+  --- the cwd's session called `name`, or nil
+  find_session(name) {
+    ---@diagnostic disable-next-line: missing-fields
+    return self.db:select('sessions', { where = { name = "{name}:{vim.fn.getcwd()}" } })[1]
+  }
+
+  --- lets the user pick one of the cwd's sessions; cb(shortname, session)
+  --- (not called if there are none, or the picker is cancelled)
+  choose_session(cb) {
+    const sessions = self:cwd_sessions()
+    if #sessions == 0 { return }
+    for _, s in ipairs(sessions) {
+      s.files = self:get_files(s)
+    }
+    require('resurrect/ui').choose_session(sessions, (s) -> {
+      if s { cb(require('resurrect/util').session_shortname(s.name), s) }
+    })
+  }
+
+  --- picks a session (directly if there's only one, unless
+  --- config.always_choose), makes it active, and calls cb(shortname, files)
+  load_session(cb) {
+    const sessions = self:cwd_sessions()
+    if #sessions == 0 {
+      vim.notify('no sessions', vim.log.levels.INFO)
+      return
+    }
+    const load = (s) -> {
+      self:activate(s)
+      cb(require('resurrect/util').session_shortname(s.name), self.session.files)
+    }
+    if #sessions == 1 && !self.config.always_choose {
+      load(sessions[1])
+      return
+    }
+    self:choose_session((_, s) -> load(s))
+  }
+
+  --- makes a sessions row the active session, w/ its files
+  activate(s) {
+    self.session = { id = s.id, name = s.name, files = self:get_files(s) }
+    if self.config.debug {
+      vim.print(self.session.files)
+    }
+  }
+
+  delete_session(id) {
+    if !self.db:delete('sessions', { id = id }) {
+      error('could not delete resurrect session')
+    }
+  }
+
+  ---@return table[]
+  get_files(session) {
+    ---@diagnostic disable-next-line: missing-fields
+    return self.db:select('files', { where = { session_id = session.id } })
+  }
+
+  add_file(path) {
+    if path && path != '' {
+      self.db:insert('files', { path = path, session_id = self.session.id })
+    }
+  }
+
+  --- saves a file's cursor ({ path, row, col })
+  update_file(update) {
+    if update.path && update.path != '' {
+      self.db:update('files', {
+        where = { session_id = self.session.id, path = update.path },
+        set = { row = update.row, col = update.col },
+      })
+    }
+  }
+
+  del_file(path) {
+    self.db:delete('files', { path = path, session_id = self.session.id })
+  }
+
+  prune_session_files(dead_files) {
+    -- TODO: config option to put dead files in quickfix
+    vim.notify('pruning dead files', vim.log.levels.DEBUG)
+    for _, file in ipairs(dead_files) {
+      self:del_file(file.path)
+    }
+  }
+}
+
+return DB

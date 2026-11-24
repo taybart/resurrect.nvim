@@ -1,0 +1,85 @@
+module function user_command(command_name, cmds) {
+  -- completes the subcommand (case-insensitive fuzzy match: "st" ->
+  -- "s[^s]*t[^t]*"), and nothing for the arguments after it
+  local function complete(arg_lead, cmd_line) {
+    const words = vim.split(cmd_line, '%s+', { trimempty = true })
+    -- past the subcommand: `:Cmd sub <Tab>` (or `:Cmd sub ar<Tab>`)
+    if #words > 2 || (#words == 2 && arg_lead == '') {
+      return {}
+    }
+    const pattern = arg_lead:lower():gsub('.', (c) -> {
+      const p = vim.pesc(c)
+      return "{p}[^{p}]*"
+    })
+    return vim.iter(vim.tbl_keys(cmds))
+      :filter((name) -> name != 'default' && name:lower():find(pattern) != nil)
+      :totable()
+  }
+
+  vim.api.nvim_create_user_command(command_name, (opts) -> {
+    local args = vim.split(opts.args, '%s+', { trimempty = true })
+    if #args == 0 {
+      cmds.default(opts)
+      return
+    }
+
+    const name = table.remove(args, 1)
+    const cmd = cmds[name]
+    if cmd == nil {
+      vim.notify("{command_name}: unknown command '{name}'", vim.log.levels.ERROR)
+      return
+    }
+
+    if type(cmd) == 'function' {
+      cmd(opts)
+    } elseif cmd.basic {
+      cmd.cb(args)
+    } else {
+      cmd.cb(opts)
+    }
+  }, {
+    nargs = '*',
+    bang = true,
+    complete = complete,
+  })
+}
+
+module function file_exists(name) {
+  const stat = vim.uv.fs_stat(name)
+  return stat != nil && stat.type == 'file'
+}
+
+--- opens files (w/ their saved cursor), and returns the ones that no longer exist
+module function open_files(files) {
+  local dead_files = {}
+  for _, f in ipairs(files) {
+    if file_exists(f.path) {
+      -- escaped, or `%` / `#` in a path expand to the current / alternate file
+      vim.cmd.edit(vim.fn.fnameescape(f.path))
+      if f.row && f.col {
+        -- the file may have shrunk since the cursor was saved
+        const row = math.min(f.row, vim.api.nvim_buf_line_count(0))
+        vim.api.nvim_win_set_cursor(0, { row, f.col })
+      }
+    } else {
+      table.insert(dead_files, f)
+    }
+  }
+  return dead_files
+}
+
+--- listed buffers w/ unsaved changes (which close_files discards)
+module function modified_buffers() {
+  return vim.iter(vim.api.nvim_list_bufs())
+    :filter((b) -> vim.bo[b].buflisted && vim.bo[b].modified)
+    :totable()
+}
+
+--- deletes every listed buffer, discarding unsaved changes (see modified_buffers)
+module function close_files() {
+  vim.cmd('%bd!')
+}
+
+module function session_shortname(name) {
+  return name:match('^([^:]*)')
+}

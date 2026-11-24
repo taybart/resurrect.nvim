@@ -1,0 +1,247 @@
+module db = nil
+module active_session = nil
+module augroup_name = 'resurrect'
+---@class config
+module config = {
+  status_icon = '🪦',
+  status_icon_active = '📓',
+  add_command = true,
+  always_choose = false, -- show picker even if one session exists
+  quiet = false,
+  db_path = vim.fn.stdpath('data') .. '/resurrect.db',
+  ignore = { '^term://', '^fugitive://', '^snacks://' },
+  -- hidden
+  debug = false,
+}
+
+-- timer from git.watch_branch while a `:Resurrect git` session is active
+local branch_watcher = nil
+
+local function ignored(path) {
+  return vim.iter(config.ignore):any((m) -> path:match(m) != nil)
+}
+
+-- notify and return true if a session is already running
+local function busy() {
+  if active_session {
+    vim.notify("current session ({active_session}) still active", vim.log.levels.ERROR)
+    return true
+  }
+  return false
+}
+
+local function in_session(path) {
+  return vim.iter(db.session.files || {}):any((f) -> f.path == path)
+}
+
+local function add(ev) {
+  const path = ev.match
+  -- no in_session check here: db.session.files is only a snapshot from when
+  -- the session started, so a file closed and reopened would never re-add
+  if path == nil || path == '' || ignored(path) {
+    return
+  }
+  db:add_file(path)
+}
+
+local function del(ev) {
+  if ev.match != nil && ev.match != '' {
+    db:del_file(ev.match)
+  }
+}
+
+local function update_cursor(ev) {
+  const path = vim.api.nvim_buf_get_name(ev.buf)
+  -- window 0 is still the buffer being left on BufLeave / VimLeavePre
+  if path == '' || ignored(path) || vim.api.nvim_win_get_buf(0) != ev.buf {
+    return
+  }
+  const [row, col] = vim.api.nvim_win_get_cursor(0)
+  db:update_file({ path = path, row = row, col = col })
+}
+
+local function create_augroup() {
+  const id = vim.api.nvim_create_augroup(augroup_name, {})
+  const autocmd = vim.api.nvim_create_autocmd
+  autocmd('BufAdd', { group = id, callback = add })
+  autocmd('BufDelete', { group = id, callback = del })
+  -- save the cursor when leaving a buffer or quitting, not on every move
+  autocmd({ 'BufLeave', 'VimLeavePre' }, { group = id, callback = update_cursor })
+}
+
+local function set_status() {
+  vim.g.has_resurrect_sessions = if active_session {
+    "{config.status_icon_active} {active_session}"
+  } elseif db:has_sessions() {
+    config.status_icon
+  } else {
+    ''
+  }
+}
+
+local function stop() {
+  if !active_session {
+    vim.notify('no active session', vim.log.levels.WARN)
+    return
+  }
+  if branch_watcher {
+    branch_watcher:stop()
+    branch_watcher:close()
+    branch_watcher = nil
+  }
+  active_session = nil
+  vim.api.nvim_del_augroup_by_name(augroup_name)
+  set_status()
+}
+
+local function start(args) {
+  if busy() { return }
+  const u = require('resurrect/util')
+  const bufnums = vim.tbl_filter(vim.api.nvim_buf_is_loaded, vim.api.nvim_list_bufs())
+  const session_name = args[1] || 'default'
+  if !db:new_session(session_name) {
+    const dead_files = u.open_files(db.session.files)
+    if #dead_files > 0 {
+      vim.print(dead_files)
+      vim.notify("there are {#dead_files} missing files in session", vim.log.levels.WARN)
+    }
+  }
+
+  for _, v in ipairs(bufnums) {
+    const path = vim.api.nvim_buf_get_name(v)
+    if path != '' && !in_session(path) && !ignored(path) {
+      if config.debug {
+        vim.notify("adding new file {path} to session", vim.log.levels.INFO)
+      }
+      db:add_file(path)
+    }
+  }
+
+  active_session = session_name
+  create_augroup()
+  set_status()
+}
+
+local function start_git(args) {
+  if busy() { return }
+  const git = require('resurrect/git')
+
+  const branch = git.current_branch()
+  if !branch {
+    vim.notify('not on a git branch (not a repo, or a detached HEAD)', vim.log.levels.WARN)
+    return
+  }
+  const session_name = if args[1] { "{branch}@{args[1]}" } else { branch }
+
+  start({ session_name })
+
+  -- TODO: is a timer the best way to do this?
+  branch_watcher = git.watch_branch((branches) -> {
+    const u = require('resurrect/util')
+    const modified = u.modified_buffers()
+    if #modified > 0 {
+      const names = vim.tbl_map((b) -> {
+        const name = vim.api.nvim_buf_get_name(b)
+        return if name == '' { '[No Name]' } else { vim.fn.fnamemodify(name, ':~:.') }
+      }, modified)
+      vim.notify(
+        "switching sessions discards unsaved changes in:\n{table.concat(names, '\n')}",
+        vim.log.levels.WARN
+      )
+    }
+    require('resurrect/ui').confirmation({
+      prompt = "Git branch changed {branches.current} -> {branches.new}, switch? [y/N]",
+      callback = (yes) -> {
+        if !yes { return }
+        -- stop() also stops this watcher; start_git makes a new one for the
+        -- new branch, w/ the same @suffix
+        if active_session { stop() }
+        u.close_files() -- FIXME: this leaves an empty buffer sometimes
+        start_git(args)
+      },
+    })
+  })
+}
+
+local function list() {
+  db:choose_session((name, s) -> {
+    const paths = vim.iter(s.files || {}):map((f) -> f.path):totable()
+    vim.notify("{name}:\n{table.concat(paths, '\n')}")
+  })
+}
+
+local function resurrect(fargs) {
+  if fargs.bang {
+    stop()
+    return
+  }
+  if busy() { return }
+  const u = require('resurrect/util')
+  db:load_session((session_name, files) -> {
+    const dead_files = u.open_files(files)
+    if #dead_files > 0 {
+      vim.notify(
+        "there are {#dead_files} missing files in session\n{vim.inspect(dead_files)}",
+        vim.log.levels.WARN
+      )
+      db:prune_session_files(dead_files)
+    }
+
+    create_augroup()
+    active_session = session_name
+    set_status()
+  })
+}
+
+local function delete(id, name) {
+  if active_session == name {
+    stop()
+  }
+  db:delete_session(id)
+  set_status()
+}
+
+local function delete_session(arg) {
+  if #arg > 0 {
+    const s = db:find_session(arg[1])
+    if !s {
+      vim.notify("no session '{arg[1]}'", vim.log.levels.ERROR)
+      return
+    }
+    if config.debug {
+      vim.print(s)
+    }
+    delete(s.id, require('resurrect/util').session_shortname(s.name))
+    return
+  }
+  db:choose_session((name, s) -> {
+    require('resurrect/ui').confirmation({
+      prompt = "You want to delete session '{name}'? [y/N]",
+      callback = (yes) -> {
+        if yes { delete(s.id, name) }
+      },
+    })
+  })
+}
+
+module function setup(opts = {}) {
+  config = vim.tbl_deep_extend('force', config, opts)
+
+  -- TODO: should this be loaded on a different event
+  db = require('resurrect/db').new(config)
+  set_status()
+  if db:has_sessions() && !config.quiet {
+    vim.notify('there are resurrect sessions available')
+  }
+
+  if config.add_command {
+    require('resurrect/util').user_command('Resurrect', {
+      default = resurrect,
+      start = { cb = start, basic = true },
+      git = { cb = start_git, basic = true },
+      stop = stop,
+      list = list,
+      delete = { cb = delete_session, basic = true },
+    })
+  }
+}

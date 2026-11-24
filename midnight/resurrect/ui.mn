@@ -1,0 +1,64 @@
+module function choose_session(choices, cb) {
+  const u = require('resurrect/util')
+  vim.ui.select(choices, {
+    prompt = 'Found Sessions',
+    format_item = (s) -> "{u.session_shortname(s.name)} ({#(s.files || {})} files)",
+  }, cb)
+}
+
+--- a floating y/n prompt. opts.callback(answer) gets true for y/Y, false for
+--- n/N/q/<Esc>, and opts.default (false if unset) for <CR> or leaving the
+--- window some other way (<C-w>w, :q, a click)
+module function confirmation(opts) {
+  const prompt = opts.prompt || '? [y/N]'
+  const default = opts.default || false
+
+  const width = math.min(vim.fn.strdisplaywidth(prompt) + 4, vim.o.columns - 2)
+  const height = 3
+  const pad = string.rep(' ', width)
+
+  const buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { pad, "  {prompt}", pad })
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].bufhidden = 'wipe'
+
+  const win = vim.api.nvim_open_win(buf, true, {
+    relative = 'editor',
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = 'minimal',
+    border = 'rounded',
+    title = ' Confirm ',
+    title_pos = 'center',
+  })
+
+  local answered = false
+  local function answer(yes) {
+    if answered { return }
+    answered = true
+    if vim.api.nvim_win_is_valid(win) { vim.api.nvim_win_close(win, true) }
+    if opts.callback { opts.callback(yes) }
+  }
+
+  -- local, not const: pairs() sees a frozen (const) table as empty on LuaJIT
+  local keys = {
+    y = true,
+    Y = true,
+    n = false,
+    N = false,
+    q = false,
+    ['<Esc>'] = false,
+    ['<CR>'] = default,
+  }
+  for key, yes in pairs(keys) {
+    vim.keymap.set('n', key, () -> answer(yes), { buffer = buf, silent = true, nowait = true })
+  }
+  -- scheduled: a window can't be closed from inside its own WinLeave
+  vim.api.nvim_create_autocmd('WinLeave', {
+    buffer = buf,
+    once = true,
+    callback = () -> vim.schedule(() -> answer(default)),
+  })
+}

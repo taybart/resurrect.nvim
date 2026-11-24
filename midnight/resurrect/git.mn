@@ -1,0 +1,43 @@
+-- local, not const: a const table literal is frozen, and on LuaJIT a frozen
+-- table looks empty to # / pairs (so vim.fn.system would get no command)
+local branch_cmd = { 'git', 'branch', '--show-current' }
+
+-- nil when git failed (ex. not a repo) or there's no branch (a detached HEAD)
+local function parse_branch(code, out) {
+  if code != 0 { return nil }
+  const branch = vim.trim(out || '')
+  return if branch == '' { nil } else { branch }
+}
+
+--- the current git branch, or nil (not a repo, or a detached HEAD)
+---@return string|nil
+module function current_branch() {
+  const out = vim.fn.system(branch_cmd)
+  return parse_branch(vim.v.shell_error, out)
+}
+
+--- calls cb({ current, new }) when the branch changes. Checks once a second w/
+--- an async git call, so the UI never waits on git. Returns the timer (stop
+--- and close it to stop watching).
+--- TODO: is a timer the best way to do this? (a uv fs_event on .git/HEAD
+--- would avoid polling, but .git can be a file in worktrees)
+module function watch_branch(cb) {
+  const timer = vim.uv.new_timer()
+  local known = current_branch()
+  local pending = false -- a git call still running (skip the tick)
+  timer:start(0, 1000, () -> {
+    if pending { return }
+    pending = true
+    vim.system(branch_cmd, { text = true }, (res) -> {
+      pending = false
+      const branch = parse_branch(res.code, res.stdout)
+      -- ignore no branch (ex. mid rebase): only a real switch counts
+      if branch && branch != known {
+        local change = { current = known, new = branch }
+        known = branch
+        vim.schedule(() -> cb(change))
+      }
+    })
+  })
+  return timer
+}
