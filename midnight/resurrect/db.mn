@@ -32,9 +32,28 @@ local class DB {
         row = 'integer',
         col = 'integer',
       },
+      -- the focused file per session. A table of its own: sqlite.lua can
+      -- create new tables in an existing db, but can't add a column to one
+      -- ("schema defined ~= db schema")
+      last_file = {
+        id = true,
+        session_id = { 'integer', unique = true, reference = 'sessions.id', on_delete = 'cascade' },
+        path = 'text',
+      },
     })
     ---@diagnostic disable-next-line: missing-parameter
     self.db:open()
+    self:migrate()
+  }
+
+  --- one row per file per session. Older versions could add a file twice, so
+  --- drop the duplicates, then let a unique index (not part of the table's
+  --- schema, so sqlite.lua doesn't mind) keep it that way
+  migrate() {
+    self.db:execute([[
+      delete from files where id not in (select min(id) from files group by session_id, path)
+    ]])
+    self.db:execute('create unique index if not exists files_session_path on files (session_id, path)')
   }
 
   --- sessions for the cwd (names end in `:<cwd>`). Filtered here rather than
@@ -131,10 +150,32 @@ local class DB {
     return self.db:select('files', { where = { session_id = session.id } })
   }
 
+  --- adds a file to the active session (a no-op if it's already in it)
   add_file(path) {
     if path && path != '' {
-      self.db:insert('files', { path = path, session_id = self.session.id })
+      self.db:eval(
+        'insert or ignore into files (path, session_id) values (?, ?)',
+        { path, self.session.id }
+      )
     }
+  }
+
+  --- remembers the active session's focused file
+  set_last_file(path) {
+    if self.session.last_file == path { return } -- (BufEnter fires a lot)
+    self.session.last_file = path
+    self.db:eval(
+      'insert into last_file (session_id, path) values (?, ?) on conflict (session_id) do update set path = excluded.path',
+      { self.session.id, path }
+    )
+  }
+
+  --- the active session's last focused file, or nil
+  ---@return string|nil
+  last_file() {
+    ---@diagnostic disable-next-line: missing-fields
+    const row = self.db:select('last_file', { where = { session_id = self.session.id } })[1]
+    return row && row.path
   }
 
   --- saves a file's cursor ({ path, row, col })

@@ -30,18 +30,42 @@ local function busy() {
   return false
 }
 
-local function in_session(path) {
-  return vim.iter(db.session.files || {}):any((f) -> f.path == path)
+--- buf's path if it's worth saving in a session: a listed, normal buffer w/ a
+--- file name. Skips help, quickfix, terminals (ex. yazi), and plugin buffers
+--- (oil://, fugitive://, ... or anything w/ a non '' buftype), plus
+--- config.ignore. nil otherwise.
+---@return string|nil
+local function trackable(buf) {
+  if !vim.api.nvim_buf_is_valid(buf) || !vim.bo[buf].buflisted || vim.bo[buf].buftype != '' {
+    return nil
+  }
+  const path = vim.api.nvim_buf_get_name(buf)
+  if path == '' || path:match('^%a[%w+.-]*://') || ignored(path) {
+    return nil
+  }
+  return path
 }
 
 local function add(ev) {
-  const path = ev.match
-  -- no in_session check here: db.session.files is only a snapshot from when
-  -- the session started, so a file closed and reopened would never re-add
-  if path == nil || path == '' || ignored(path) {
-    return
-  }
-  db:add_file(path)
+  -- checked a tick later: on BufAdd a help (or quickfix, terminal, ...)
+  -- buffer doesn't have its buftype / buflisted set yet
+  vim.schedule(() -> {
+    const path = trackable(ev.buf)
+    if path { db:add_file(path) }
+  })
+}
+
+-- remember the focused file, so resurrecting lands back on it
+local function focus(ev) {
+  const path = trackable(ev.buf)
+  if path { db:set_last_file(path) }
+}
+
+--- after opening a session's files, switch to the one that had focus
+local function restore_focus() {
+  const path = db:last_file()
+  const buf = if path { vim.fn.bufnr(path) } else { -1 }
+  if buf != -1 { vim.cmd.buffer(buf) }
 }
 
 local function del(ev) {
@@ -51,9 +75,9 @@ local function del(ev) {
 }
 
 local function update_cursor(ev) {
-  const path = vim.api.nvim_buf_get_name(ev.buf)
+  const path = trackable(ev.buf)
   -- window 0 is still the buffer being left on BufLeave / VimLeavePre
-  if path == '' || ignored(path) || vim.api.nvim_win_get_buf(0) != ev.buf {
+  if !path || vim.api.nvim_win_get_buf(0) != ev.buf {
     return
   }
   const [row, col] = vim.api.nvim_win_get_cursor(0)
@@ -67,6 +91,9 @@ local function create_augroup() {
   autocmd('BufDelete', { group = id, callback = del })
   -- save the cursor when leaving a buffer or quitting, not on every move
   autocmd({ 'BufLeave', 'VimLeavePre' }, { group = id, callback = update_cursor })
+  autocmd('BufEnter', { group = id, callback = focus })
+  -- a file that didn't exist yet on BufAdd (a new file) counts once it's saved
+  autocmd('BufWritePost', { group = id, callback = add })
 }
 
 local function set_status() {
@@ -107,15 +134,17 @@ local function start(args) {
     }
   }
 
+  -- add what's already open (add_file skips files already in the session)
   for _, v in ipairs(bufnums) {
-    const path = vim.api.nvim_buf_get_name(v)
-    if path != '' && !in_session(path) && !ignored(path) {
+    const path = trackable(v)
+    if path {
       if config.debug {
         vim.notify("adding new file {path} to session", vim.log.levels.INFO)
       }
       db:add_file(path)
     }
   }
+  restore_focus()
 
   active_session = session_name
   create_augroup()
@@ -186,6 +215,7 @@ local function resurrect(fargs) {
       )
       db:prune_session_files(dead_files)
     }
+    restore_focus()
 
     create_augroup()
     active_session = session_name

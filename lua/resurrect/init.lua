@@ -30,18 +30,42 @@ local function busy()
   return false
 end
 
-local function in_session(path)
-  return vim.iter(_MODULE.db.session.files or {}):any(function(f) return f.path == path end)
+--- buf's path if it's worth saving in a session: a listed, normal buffer w/ a
+--- file name. Skips help, quickfix, terminals (ex. yazi), and plugin buffers
+--- (oil://, fugitive://, ... or anything w/ a non '' buftype), plus
+--- config.ignore. nil otherwise.
+---@return string|nil
+local function trackable(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or not vim.bo[buf].buflisted or vim.bo[buf].buftype ~= "" then
+    return nil
+  end
+  local path = vim.api.nvim_buf_get_name(buf)
+  if path == "" or path:match("^%a[%w+.-]*://") or ignored(path) then
+    return nil
+  end
+  return path
 end
 
 local function add(ev)
-  local path = ev.match
 
 
-  if path == nil or path == "" or ignored(path) then
-    return
-  end
-  _MODULE.db:add_file(path)
+  vim.schedule(function()
+    local path = trackable(ev.buf)
+    if path then _MODULE.db:add_file(path) end
+  end)
+end
+
+
+local function focus(ev)
+  local path = trackable(ev.buf)
+  if path then _MODULE.db:set_last_file(path) end
+end
+
+--- after opening a session's files, switch to the one that had focus
+local function restore_focus()
+  local path = _MODULE.db:last_file()
+  local __MIDNIGHT_TMP_1__ if path then __MIDNIGHT_TMP_1__ = (vim.fn.bufnr(path)) else __MIDNIGHT_TMP_1__ = -1 end local buf = __MIDNIGHT_TMP_1__
+  if buf ~= -1 then vim.cmd.buffer(buf) end
 end
 
 local function del(ev)
@@ -51,12 +75,12 @@ local function del(ev)
 end
 
 local function update_cursor(ev)
-  local path = vim.api.nvim_buf_get_name(ev.buf)
+  local path = trackable(ev.buf)
 
-  if path == "" or ignored(path) or vim.api.nvim_win_get_buf(0) ~= ev.buf then
+  if not path or vim.api.nvim_win_get_buf(0) ~= ev.buf then
     return
   end
-  local row, col local __MIDNIGHT_TMP_1__ = vim.api.nvim_win_get_cursor(0) row = __MIDNIGHT_TMP_1__[1] col = __MIDNIGHT_TMP_1__[2]
+  local row, col local __MIDNIGHT_TMP_2__ = vim.api.nvim_win_get_cursor(0) row = __MIDNIGHT_TMP_2__[1] col = __MIDNIGHT_TMP_2__[2]
   _MODULE.db:update_file({path = path, row = row, col = col})
 end
 
@@ -67,16 +91,19 @@ local function create_augroup()
   autocmd("BufDelete", {group = id, callback = del})
 
   autocmd({"BufLeave", "VimLeavePre"}, {group = id, callback = update_cursor})
+  autocmd("BufEnter", {group = id, callback = focus})
+
+  autocmd("BufWritePost", {group = id, callback = add})
 end
 
 local function set_status()
-  do local __MIDNIGHT_TMP_2__ if _MODULE.active_session then __MIDNIGHT_TMP_2__ = 
+  do local __MIDNIGHT_TMP_3__ if _MODULE.active_session then __MIDNIGHT_TMP_3__ = 
       tostring(_MODULE.config.status_icon_active) .. " " .. tostring(_MODULE.active_session)
-    elseif _MODULE.db:has_sessions() then __MIDNIGHT_TMP_2__ = 
-      _MODULE.config.status_icon else __MIDNIGHT_TMP_2__ = 
+    elseif _MODULE.db:has_sessions() then __MIDNIGHT_TMP_3__ = 
+      _MODULE.config.status_icon else __MIDNIGHT_TMP_3__ = 
 
       ""
-    end vim.g.has_resurrect_sessions = __MIDNIGHT_TMP_2__ end
+    end vim.g.has_resurrect_sessions = __MIDNIGHT_TMP_3__ end
 end
 
 local function stop()
@@ -107,15 +134,17 @@ local function start(args)
     end
   end
 
+
   for _, v in ipairs(bufnums) do
-    local path = vim.api.nvim_buf_get_name(v)
-    if path ~= "" and not in_session(path) and not ignored(path) then
+    local path = trackable(v)
+    if path then
       if _MODULE.config.debug then
         vim.notify("adding new file " .. tostring(path) .. " to session", vim.log.levels.INFO)
       end
       _MODULE.db:add_file(path)
     end
   end
+  restore_focus()
 
   _MODULE.active_session = session_name
   create_augroup()
@@ -131,7 +160,7 @@ local function start_git(args)
     vim.notify("not on a git branch (not a repo, or a detached HEAD)", vim.log.levels.WARN)
     return
   end
-  local __MIDNIGHT_TMP_4__ if args[1] then __MIDNIGHT_TMP_4__ = tostring(branch) .. "@" .. tostring(args[1]) else __MIDNIGHT_TMP_4__ = branch end local session_name = __MIDNIGHT_TMP_4__
+  local __MIDNIGHT_TMP_5__ if args[1] then __MIDNIGHT_TMP_5__ = tostring(branch) .. "@" .. tostring(args[1]) else __MIDNIGHT_TMP_5__ = branch end local session_name = __MIDNIGHT_TMP_5__
 
   start({session_name})
 
@@ -186,6 +215,7 @@ local function resurrect(fargs)
 
       _MODULE.db:prune_session_files(dead_files)
     end
+    restore_focus()
 
     create_augroup()
     _MODULE.active_session = session_name
